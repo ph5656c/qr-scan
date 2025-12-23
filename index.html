@@ -1,78 +1,52 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <title>QR Code 掃描</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://unpkg.com/jsqr/dist/jsQR.js"></script>
+  <meta charset="UTF-8">
+  <title>線材條碼掃描</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
 
-<h3>QR Code 掃描</h3>
+<h3>掃描 3D 列印線材條形碼</h3>
 
-<button onclick="startScan()">啟動鏡頭</button>
-<br><br>
-<input id="result" placeholder="掃描結果" style="width:100%;" readonly>
+<button onclick="startScan()">開始掃描</button>
+<input id="result" readonly style="width:100%; margin-top:10px;">
 
-<br><br>
-<video id="video" autoplay playsinline style="width:100%; max-width:320px;"></video>
-<canvas id="canvas" hidden></canvas>
+<video id="video" style="width:100%; max-width:320px;" playsinline></video>
 
-<script>
+<script type="module">
+import { BrowserMultiFormatReader } from
+  "https://unpkg.com/@zxing/browser@latest/esm/index.js";
+
 const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+const resultInput = document.getElementById("result");
+const codeReader = new BrowserMultiFormatReader();
 
-let stream = null;
-let scanning = false;
+window.startScan = async function () {
+  try {
+    const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+    const deviceId = devices[devices.length - 1].deviceId; // 後鏡頭
 
-function startScan() {
-    if (scanning) return;
-    scanning = true;
-
-    navigator.mediaDevices.getUserMedia({
-        video: {
-            facingMode: "environment",
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-        }
-    }).then(s => {
-        stream = s;
-        video.srcObject = stream;
-        requestAnimationFrame(scanLoop);
-    }).catch(err => {
-        alert("相機啟動失敗：" + err);
+    codeReader.decodeFromVideoDevice(deviceId, video, (result, err) => {
+      if (result) {
+        resultInput.value = result.getText();
+        codeReader.reset();
+        sendToAPI(result.getText());
+      }
     });
+  } catch (e) {
+    alert("無法啟動相機：" + e);
+  }
 }
 
-function scanLoop() {
-    if (!scanning) return;
-
-    if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
-
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, canvas.width, canvas.height);
-
-        if (code) {
-            document.getElementById("result").value = code.data;
-            stopScan();
-            return;
-        }
-    }
-    requestAnimationFrame(scanLoop);
-}
-
-function stopScan() {
-    scanning = false;
-    if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-        stream = null;
-    }
+function sendToAPI(code) {
+  fetch("https://script.google.com/macros/s/XXXX/exec", {
+    method: "POST",
+    body: JSON.stringify({ barcode: code })
+  });
 }
 </script>
 
 </body>
 </html>
+
